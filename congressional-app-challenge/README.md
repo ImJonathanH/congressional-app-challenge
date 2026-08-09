@@ -191,6 +191,21 @@ fact that no candidate PII comes back to the browser.
 The **client** has no automated tests. The Firebase emulator suite would be the way to add them,
 but it needs Java 11+.
 
+## Dependencies
+
+`npm audit` should report **0 vulnerabilities**. Two things keep it there:
+
+- **`firebase-admin` must stay on 14.x.** Older majors pull a vulnerable `protobufjs` (critical)
+  and `jsonwebtoken` 8 (high). v14 requires Node ≥ 22.
+- **The `uuid` override in `package.json`.** `@google-cloud/storage` (an optional dependency of
+  firebase-admin that this app never actually uses) still asks for `uuid@9`, which has a moderate
+  advisory. The override forces `^11.1.1` — the lowest patched version that still ships a
+  CommonJS build. uuid 13+ is ESM-only and breaks `require('uuid')` inside `gaxios`.
+
+⚠️ **Do not run `npm audit fix --force`.** npm's suggested "fix" here is to *downgrade*
+firebase-admin to 10.3.0, which reintroduces the critical and high advisories. If audit ever goes
+red again, check `npm ls firebase-admin` first — an unexpectedly old version is the usual cause.
+
 ## Going to production
 
 1. A Checkr account with a signed agreement — production keys need business verification, and
