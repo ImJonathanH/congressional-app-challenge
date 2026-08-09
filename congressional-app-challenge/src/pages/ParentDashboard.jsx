@@ -54,7 +54,7 @@ export default function ParentDashboard() {
 
   const teens = useMemo(() => {
     const filtered = app.teens.filter((t) => {
-      if (t.isSelf) return false
+      if (t.id === app.uid) return false
       if (service !== 'all' && !t.services.includes(service)) return false
       if (t.distance > maxDistance) return false
       if (t.rate > maxRate) return false
@@ -71,7 +71,7 @@ export default function ParentDashboard() {
       'rate-low': (a, b) => a.rate - b.rate,
     }
     return [...filtered].sort(sorters[sort])
-  }, [app.teens, app.priorities, service, maxDistance, maxRate, verifiedOnly, sort, query])
+  }, [app.teens, app.uid, app.priorities, service, maxDistance, maxRate, verifiedOnly, sort, query])
 
   const myJobs = app.postedJobs
 
@@ -205,7 +205,7 @@ export default function ParentDashboard() {
 
   return (
     <DashboardShell
-      name={app.verification?.applicantName || 'Your family'}
+      name={app.profile?.displayName || 'Your family'}
       subtitle={`Parent · ZIP ${app.zip}`}
       verified={app.verification?.result === 'clear'}
       sidebar={sidebar}

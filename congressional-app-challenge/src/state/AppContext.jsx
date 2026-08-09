@@ -1,128 +1,122 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppContext } from './appContext.js'
-import { SEED_JOBS, SEED_TEENS } from '../data/seed.js'
+import { useAuth } from './authContext.js'
+import * as db from '../services/db.js'
 
-const STORAGE_KEY = 'teenhands.v1'
-
-const EMPTY = {
-  /** 'parent' | 'teen' | null */
-  role: null,
-  zip: '',
-  /** Parent-only */
-  priorities: [],
-  verification: null,
-  /** Teen-only */
-  teenProfile: null,
-  /** Job ids the signed-in teen has applied to */
-  applications: [],
-  /** Teen ids the signed-in parent has invited */
-  invites: [],
-  /** Jobs the signed-in parent has posted (prepended to the seed list) */
-  postedJobs: [],
-  /** Teen listings created from "List yourself" */
-  listedTeens: [],
-}
-
-function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? { ...EMPTY, ...JSON.parse(raw) } : EMPTY
-  } catch {
-    return EMPTY
-  }
-}
-
+/**
+ * Session state, backed by Firestore.
+ *
+ * Everything here is a live subscription: a job a parent posts appears in a
+ * teen's feed without a refresh, and the background-check result written by the
+ * Express server lands on the parent's screen the moment Checkr finishes.
+ *
+ * Nothing is cached in localStorage any more — the signed-in Firebase user is
+ * the identity, and Firestore is the single source of truth.
+ */
 export function AppProvider({ children }) {
-  const [state, setState] = useState(load)
+  const { uid } = useAuth()
 
+  const [profile, setProfile] = useState(null)
+  const [teens, setTeens] = useState([])
+  const [jobs, setJobs] = useState([])
+  const [applications, setApplications] = useState([])
+  const [invites, setInvites] = useState([])
+  const [verification, setVerification] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const onError = useCallback((e) => setError(e.message), [])
+
+  // Per-user documents. Torn down and rebuilt when the signed-in user changes.
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    } catch {
-      /* storage disabled — the session just won't persist */
+    if (!uid) {
+      setProfile(null)
+      setApplications([])
+      setInvites([])
+      setVerification(null)
+      setLoading(false)
+      return undefined
     }
-  }, [state])
+
+    setLoading(true)
+    const unsubscribes = [
+      db.subscribeProfile(
+        uid,
+        (next) => {
+          setProfile(next)
+          setLoading(false)
+        },
+        onError,
+      ),
+      db.subscribeApplications(uid, setApplications, onError),
+      db.subscribeInvites(uid, setInvites, onError),
+      db.subscribeBackgroundCheck(uid, setVerification, onError),
+    ]
+    return () => unsubscribes.forEach((fn) => fn())
+  }, [uid, onError])
+
+  // Shared collections. Readable by anyone signed in, so they don't depend on uid.
+  useEffect(() => {
+    if (!uid) return undefined
+    const unsubscribes = [db.subscribeTeens(setTeens, onError), db.subscribeJobs(setJobs, onError)]
+    return () => unsubscribes.forEach((fn) => fn())
+  }, [uid, onError])
 
   const value = useMemo(() => {
-    const patch = (updates) => setState((s) => ({ ...s, ...updates }))
+    const applicationJobIds = applications.map((a) => a.jobId)
+    const invitedTeenIds = invites.map((i) => i.teenId)
 
     return {
-      ...state,
+      uid,
+      loading,
+      error,
 
-      /** Every job a teen can browse: parent-posted first, then seeds. */
-      jobs: [...state.postedJobs, ...SEED_JOBS],
-      /** Every teen a parent can browse, including self-listings. */
-      teens: [...state.listedTeens, ...SEED_TEENS],
+      // Profile fields, flattened so components read them the same way as before.
+      profile,
+      role: profile?.role ?? null,
+      zip: profile?.zip ?? '',
+      priorities: profile?.priorities ?? [],
+      teenProfile: profile?.teenProfile ?? null,
+      listed: Boolean(profile?.listed),
+      verification,
 
-      patch,
+      teens,
+      jobs,
+      applications: applicationJobIds,
+      invites: invitedTeenIds,
+      postedJobs: jobs.filter((j) => j.postedBy === uid),
 
-      setRole: (role) => patch({ role }),
-      setZip: (zip) => patch({ zip }),
-      setPriorities: (priorities) => patch({ priorities }),
-      setVerification: (verification) => patch({ verification }),
-      setTeenProfile: (teenProfile) => patch({ teenProfile }),
+      /* ---- writes ---- */
+
+      setRole: (role) => db.saveProfile(uid, { role }),
+      setZip: (zip) => db.saveProfile(uid, { zip }),
+      setPriorities: (priorities) => db.saveProfile(uid, { priorities }),
+      setTeenProfile: (teenProfile) => db.saveProfile(uid, { teenProfile }),
 
       postJob: (job) =>
-        setState((s) => ({
-          ...s,
-          postedJobs: [
-            {
-              ...job,
-              id: `j-${Date.now()}`,
-              postedBy: 'me',
-              postedAt: 'Just now',
-              zip: job.zip || s.zip,
-              distance: 0,
-            },
-            ...s.postedJobs,
-          ],
-        })),
+        db.postJob(uid, {
+          ...job,
+          zip: job.zip || profile?.zip || '',
+          family: profile?.displayName ? `The ${profile.displayName.split(' ').pop()} Family` : undefined,
+        }),
 
-      applyToJob: (jobId) =>
-        setState((s) =>
-          s.applications.includes(jobId)
-            ? s
-            : { ...s, applications: [...s.applications, jobId] },
-        ),
+      applyToJob: (jobId) => {
+        const job = jobs.find((j) => j.id === jobId)
+        return job ? db.applyToJob(uid, job) : Promise.resolve()
+      },
 
       toggleInvite: (teenId) =>
-        setState((s) => ({
-          ...s,
-          invites: s.invites.includes(teenId)
-            ? s.invites.filter((id) => id !== teenId)
-            : [...s.invites, teenId],
-        })),
+        invitedTeenIds.includes(teenId)
+          ? db.withdrawInvite(uid, teenId)
+          : db.inviteTeen(uid, teenId),
 
-      /** Publishes the signed-in teen into the parent-facing directory. */
-      listSelf: (profile) =>
-        setState((s) => ({
-          ...s,
-          teenProfile: profile,
-          listedTeens: [
-            {
-              id: 'me',
-              name: profile.name || 'You',
-              age: Number(profile.age) || 16,
-              grade: profile.grade || '',
-              services: profile.services,
-              rate: Number(profile.rate) || 15,
-              rating: null,
-              reviews: 0,
-              distance: 0,
-              verified: false,
-              cpr: Boolean(profile.cpr),
-              badges: ['Your listing'],
-              days: profile.days || [],
-              bio: profile.bio || '',
-              isSelf: true,
-            },
-            ...s.listedTeens.filter((t) => t.id !== 'me'),
-          ],
-        })),
-
-      reset: () => setState(EMPTY),
+      /** Publishes the teen into the parent-facing directory. */
+      listSelf: async (teenProfile) => {
+        await db.saveProfile(uid, { teenProfile, listed: true })
+        await db.publishTeenListing(uid, { ...teenProfile, zip: profile?.zip ?? '' })
+      },
     }
-  }, [state])
+  }, [uid, loading, error, profile, verification, teens, jobs, applications, invites])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

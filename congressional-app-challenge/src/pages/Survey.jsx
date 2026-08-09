@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo.jsx'
 import { useApp } from '../state/appContext.js'
+import { useAuth } from '../state/authContext.js'
+import { friendlyAuthError } from '../state/authErrors.js'
+import { createProfile, saveProfile } from '../services/db.js'
 import { PARENT_PRIORITIES, SERVICES, WEEKDAYS } from '../data/services.js'
 import {
   fetchConfig,
@@ -16,16 +19,23 @@ import './Survey.css'
 
 const ZIP_RE = /^\d{5}$/
 
-/** Ordered step ids per role, used for the progress bar. */
+/**
+ * Ordered step ids per role, used for the progress bar. The account step is
+ * dropped for anyone already signed in.
+ */
 const FLOW = {
   none: ['zip', 'role'],
-  parent: ['zip', 'role', 'priorities', 'verify'],
-  teen: ['zip', 'role', 'teen-setup'],
+  parent: ['zip', 'role', 'account', 'priorities', 'verify'],
+  teen: ['zip', 'role', 'account', 'teen-setup'],
 }
+
+const flowFor = (role, signedIn) =>
+  (FLOW[role ?? 'none'] ?? FLOW.none).filter((s) => !(signedIn && s === 'account'))
 
 export default function Survey() {
   const navigate = useNavigate()
   const app = useApp()
+  const { uid, loading: authLoading } = useAuth()
 
   const [step, setStep] = useState('zip')
   const [zip, setZipLocal] = useState(app.zip)
@@ -35,9 +45,40 @@ export default function Survey() {
   // Set once the background check starts — you can't back out mid-screening.
   const [locked, setLocked] = useState(false)
 
-  const flow = FLOW[role ?? 'none']
+  const flow = flowFor(role, Boolean(uid))
   const stepIndex = Math.max(flow.indexOf(step), 0)
   const progress = ((stepIndex + 1) / flow.length) * 100
+
+  // A returning user's profile arrives from Firestore a moment after auth does.
+  // Pick up where they left off rather than restarting the survey.
+  useEffect(() => {
+    if (!uid || app.loading || !app.profile) return
+    if (app.role === 'parent' && app.verification?.result === 'clear') {
+      navigate('/parent', { replace: true })
+    } else if (app.role === 'teen' && app.teenProfile) {
+      navigate('/teen', { replace: true })
+    } else {
+      if (app.zip) setZipLocal(app.zip)
+      if (app.role) {
+        setRoleLocal(app.role)
+        setStep((current) =>
+          current === 'zip' || current === 'role'
+            ? app.role === 'parent'
+              ? 'priorities'
+              : 'teen-setup'
+            : current,
+        )
+      }
+    }
+  }, [uid, app.loading, app.profile, app.role, app.zip, app.teenProfile, app.verification, navigate])
+
+  if (authLoading || (uid && app.loading)) {
+    return (
+      <div className="page-spinner">
+        <span className="verify-spinner" aria-label="Loading" />
+      </div>
+    )
+  }
 
   const goBack = () => {
     const prev = flow[stepIndex - 1]
@@ -52,15 +93,24 @@ export default function Survey() {
       return
     }
     setZipError('')
-    app.setZip(zip.trim())
+    if (uid) app.setZip(zip.trim())
     setStep('role')
   }
 
   const chooseRole = (nextRole) => {
     setRoleLocal(nextRole)
-    app.setRole(nextRole)
-    setStep(nextRole === 'parent' ? 'priorities' : 'teen-setup')
+    // Without an account there is nowhere to save this yet, so collect it
+    // locally and write both fields once the account exists.
+    if (uid) {
+      app.setRole(nextRole)
+      setStep(nextRole === 'parent' ? 'priorities' : 'teen-setup')
+    } else {
+      setStep('account')
+    }
   }
+
+  const onAccountCreated = () =>
+    setStep(role === 'parent' ? 'priorities' : 'teen-setup')
 
   const togglePriority = (id) =>
     setPrioritiesLocal((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
@@ -205,6 +255,10 @@ export default function Survey() {
             </div>
           )}
 
+          {step === 'account' && (
+            <AccountStep zip={zip} role={role} onDone={onAccountCreated} />
+          )}
+
           {step === 'verify' && (
             <VerifyStep onStart={() => setLocked(true)} onDone={() => navigate('/parent')} />
           )}
@@ -213,6 +267,99 @@ export default function Survey() {
         </div>
       </main>
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Account creation                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Creates the Firebase Auth user, then writes the ZIP and role that were
+ * collected in the previous two steps. Both writes go to users/{uid}, which
+ * only this account can read or write (see firestore.rules).
+ */
+function AccountStep({ zip, role, onDone }) {
+  const { signUp } = useAuth()
+  const [form, setForm] = useState({ displayName: '', email: '', password: '' })
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const ready = form.displayName.trim() && form.email.trim() && form.password.length >= 6
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setError(null)
+    setBusy(true)
+    try {
+      const user = await signUp(form)
+      await createProfile(user.uid, { email: form.email.trim(), displayName: form.displayName.trim() })
+      await saveProfile(user.uid, { zip, role })
+      onDone()
+    } catch (err) {
+      setError(friendlyAuthError(err))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="survey-step" onSubmit={submit}>
+      <span className="survey-badge">Create your account</span>
+      <h1 className="survey-q">Save your spot</h1>
+      <p className="survey-help">
+        An account keeps your {role === 'parent' ? 'jobs and matches' : 'listing and applications'}{' '}
+        in one place, and lets people reach you.
+      </p>
+
+      <label className="field auth-field">
+        <span className="field-label">
+          {role === 'parent' ? 'Your name' : 'First name and last initial'}
+        </span>
+        <input
+          className="input"
+          value={form.displayName}
+          onChange={set('displayName')}
+          placeholder={role === 'parent' ? 'Jordan Alvarez' : 'Maya R.'}
+          autoComplete="name"
+          autoFocus
+        />
+      </label>
+
+      <label className="field auth-field">
+        <span className="field-label">Email</span>
+        <input
+          className="input"
+          type="email"
+          value={form.email}
+          onChange={set('email')}
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
+      </label>
+
+      <label className="field auth-field">
+        <span className="field-label">Password</span>
+        <input
+          className="input"
+          type="password"
+          value={form.password}
+          onChange={set('password')}
+          autoComplete="new-password"
+        />
+        <span className="survey-hint">At least 6 characters.</span>
+      </label>
+
+      {error && <p className="survey-error">{error}</p>}
+
+      <button type="submit" className="btn btn-primary btn-lg survey-next" disabled={!ready || busy}>
+        {busy ? 'Creating your account…' : 'Create account'}
+      </button>
+
+      <p className="survey-hint">
+        Already have one? <Link to="/signin">Sign in</Link>.
+      </p>
+    </form>
   )
 }
 
@@ -235,8 +382,6 @@ function VerifyStep({ onStart, onDone }) {
   const [error, setError] = useState(null)
   const [config, setConfig] = useState(null)
 
-  const fullName = `${applicant.firstName} ${applicant.lastName}`.trim()
-
   useEffect(() => {
     fetchConfig()
       .then(setConfig)
@@ -251,7 +396,8 @@ function VerifyStep({ onStart, onDone }) {
       onUpdate: (next) => {
         setCheck(next)
         setPhase(isFinished(next) ? 'complete' : next.status)
-        if (isClear(next)) app.setVerification({ ...next, applicantName: fullName })
+        // The authoritative record is written to Firestore by the server;
+        // this local copy just drives the screen while the tab is open.
       },
     })
     watcher.promise.catch((e) => {

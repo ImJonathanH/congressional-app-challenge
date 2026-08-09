@@ -36,6 +36,9 @@ export default function Landing() {
             <a href="#how">How it works</a>
             <a href="#trust">Safety</a>
           </nav>
+          <Link to="/signin" className="landing-signin">
+            Sign in
+          </Link>
           <button type="button" className="btn btn-primary btn-sm" onClick={start}>
             Get Started
           </button>

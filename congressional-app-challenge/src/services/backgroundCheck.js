@@ -11,6 +11,16 @@
 
 const API = '/api'
 
+/**
+ * Supplies the caller's Firebase ID token. Set once at startup by AuthProvider's
+ * consumer so this module doesn't have to import Firebase itself.
+ */
+let getIdToken = async () => null
+
+export function setTokenProvider(fn) {
+  getIdToken = fn
+}
+
 /** Statuses the UI switches on. Mirrors the server's projection. */
 export const STATUS = {
   AWAITING_CANDIDATE: 'awaiting_candidate',
@@ -50,10 +60,18 @@ async function readJson(res) {
   return body
 }
 
-async function call(path, options) {
+async function call(path, options = {}) {
+  // The server verifies this token with the Firebase Admin SDK before it will
+  // start a check or hand back a result.
+  const token = await getIdToken()
+  const headers = {
+    ...options.headers,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
   let res
   try {
-    res = await fetch(`${API}${path}`, options)
+    res = await fetch(`${API}${path}`, { ...options, headers })
   } catch {
     throw new BackgroundCheckError(
       'Could not reach the TeenHands API. Start it with `npm run server`.',

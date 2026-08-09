@@ -8,6 +8,17 @@ import { verifyWebhookSignature } from './checkr.js'
 const API_KEY = 'test_key_abc123'
 const servers = []
 
+/** Stands in for Firebase Admin: "id-token-for-<uid>" authenticates as <uid>. */
+const fakeFirebaseAuth = {
+  async verifyIdToken(token) {
+    const match = /^id-token-for-(.+)$/.exec(token)
+    if (!match) throw new Error('invalid token')
+    return { uid: match[1] }
+  },
+}
+
+const asUser = (uid) => ({ Authorization: `Bearer id-token-for-${uid}` })
+
 /** Boots an HTTP server on an ephemeral port and returns its base URL. */
 function listen(app) {
   return new Promise((resolve) => {
@@ -26,6 +37,7 @@ async function boot(script) {
       apiKey: API_KEY,
       baseUrl: `${checkrUrl}/v1`,
       packageSlug: 'tasker_standard',
+      firebaseAuth: fakeFirebaseAuth,
       logger: {},
     }),
   )
@@ -34,10 +46,10 @@ async function boot(script) {
 
 const json = async (res) => ({ status: res.status, body: await res.json() })
 
-const start = (baseUrl, overrides = {}) =>
+const start = (baseUrl, overrides = {}, uid = 'user_1') =>
   fetch(`${baseUrl}/api/background-checks`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...asUser(uid) },
     body: JSON.stringify({
       firstName: 'Jordan',
       lastName: 'Alvarez',
@@ -57,7 +69,8 @@ describe('POST /api/background-checks', () => {
 
     assert.equal(status, 201)
     assert.equal(body.status, 'awaiting_candidate')
-    assert.match(body.id, /^chk_/)
+    // One check per account, so the record is keyed by the caller's uid.
+    assert.equal(body.id, 'user_1')
     assert.match(body.invitationUrl, /^https:\/\/apply\.checkr-staging\.com\//)
     assert.ok(body.expiresAt)
   })
@@ -82,7 +95,7 @@ describe('POST /api/background-checks', () => {
   })
 
   it('returns 503 when the server has no Checkr key', async () => {
-    const url = await listen(createApp({ logger: {} }))
+    const url = await listen(createApp({ firebaseAuth: fakeFirebaseAuth, logger: {} }))
     const { status, body } = await json(await start(url))
 
     assert.equal(status, 503)
@@ -93,7 +106,12 @@ describe('POST /api/background-checks', () => {
     // Wrong key on our side: the double answers 401, as Checkr would.
     const checkrUrl = await listen(createCheckrTestDouble({ apiKey: 'a_different_key' }))
     const url = await listen(
-      createApp({ apiKey: API_KEY, baseUrl: `${checkrUrl}/v1`, logger: {} }),
+      createApp({
+        apiKey: API_KEY,
+        baseUrl: `${checkrUrl}/v1`,
+        firebaseAuth: fakeFirebaseAuth,
+        logger: {},
+      }),
     )
     const { status, body } = await json(await start(url))
 
@@ -108,7 +126,9 @@ describe('GET /api/background-checks/:id', () => {
     const { body: created } = await json(await start(url))
     assert.equal(created.status, 'awaiting_candidate')
 
-    const poll = async () => (await json(await fetch(`${url}/api/background-checks/${created.id}`))).body
+    const poll = async () =>
+      (await json(await fetch(`${url}/api/background-checks/${created.id}`, { headers: asUser('user_1') })))
+        .body
 
     // First poll: candidate still hasn't opened the Checkr link.
     assert.equal((await poll()).status, 'awaiting_candidate')
@@ -135,7 +155,9 @@ describe('GET /api/background-checks/:id', () => {
 
     let latest
     for (let i = 0; i < 5; i += 1) {
-      latest = (await json(await fetch(`${url}/api/background-checks/${created.id}`))).body
+      latest = (
+        await json(await fetch(`${url}/api/background-checks/${created.id}`, { headers: asUser('user_1') }))
+      ).body
       if (latest.status === 'complete') break
     }
 
@@ -146,8 +168,65 @@ describe('GET /api/background-checks/:id', () => {
 
   it('404s on an unknown id', async () => {
     const url = await boot()
-    const { status } = await json(await fetch(`${url}/api/background-checks/chk_nope`))
+    const { status } = await json(
+      await fetch(`${url}/api/background-checks/chk_nope`, { headers: asUser('user_1') }),
+    )
     assert.equal(status, 404)
+  })
+})
+
+describe('authentication', () => {
+  it('refuses to start a check without a valid Firebase token', async () => {
+    const url = await boot()
+
+    const noHeader = await fetch(`${url}/api/background-checks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    assert.equal(noHeader.status, 401)
+
+    const badToken = await fetch(`${url}/api/background-checks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer forged' },
+      body: '{}',
+    })
+    assert.equal(badToken.status, 401)
+  })
+
+  it('will not let one user read another user’s screening result', async () => {
+    const url = await boot()
+    const { body: mine } = await json(await start(url, {}, 'user_1'))
+
+    const asSomeoneElse = await json(
+      await fetch(`${url}/api/background-checks/${mine.id}`, { headers: asUser('user_2') }),
+    )
+    // 404 rather than 403, so an id can't be confirmed to exist by probing.
+    assert.equal(asSomeoneElse.status, 404)
+
+    const asOwner = await json(
+      await fetch(`${url}/api/background-checks/${mine.id}`, { headers: asUser('user_1') }),
+    )
+    assert.equal(asOwner.status, 200)
+  })
+
+  it('does not re-run a check the account already has', async () => {
+    const url = await boot({ pollsBeforeInvitationCompleted: 999 })
+    const first = await json(await start(url))
+    const second = await json(await start(url))
+
+    assert.equal(first.status, 201)
+    assert.equal(second.status, 200) // returned the existing one
+    assert.equal(second.body.id, first.body.id)
+    assert.equal(second.body.invitationUrl, first.body.invitationUrl)
+  })
+
+  it('returns 503 when the server has no Firebase credentials', async () => {
+    const url = await listen(createApp({ apiKey: API_KEY, logger: {} }))
+    const { status, body } = await json(await start(url))
+
+    assert.equal(status, 503)
+    assert.equal(body.code, 'auth_not_configured')
   })
 })
 
@@ -199,7 +278,9 @@ describe('POST /api/webhooks/checkr', () => {
     }
     assert.equal((await send(url, reportEvent, sign(reportEvent))).status, 200)
 
-    const { body } = await json(await fetch(`${url}/api/background-checks/${created.id}`))
+    const { body } = await json(
+      await fetch(`${url}/api/background-checks/${created.id}`, { headers: asUser('user_1') }),
+    )
     assert.equal(body.status, 'complete')
     assert.equal(body.result, 'clear')
   })
@@ -225,5 +306,6 @@ describe('GET /api/config', () => {
 
     const bare = await json(await fetch(`${await listen(createApp({ logger: {} }))}/api/config`))
     assert.equal(bare.body.checkrConfigured, false)
+    assert.equal(bare.body.firebaseConfigured, false)
   })
 })

@@ -1,38 +1,44 @@
 import express from 'express'
 import { CheckrError, createCheckrClient, verifyWebhookSignature } from './checkr.js'
+import { requireAuth } from './firebaseAdmin.js'
 import { createStore, toPublicCheck } from './store.js'
 
 /**
  * Builds the TeenHands API.
  *
- * Everything Checkr-related lives behind this server so the secret API key
- * never reaches the browser.
+ * Two secrets live behind this server and never reach the browser: the Checkr
+ * API key, and the Firebase service-account key. Callers prove who they are
+ * with a Firebase ID token, which is verified here before any check is started.
  *
- * @param {object}  options
- * @param {string=} options.apiKey       Checkr secret key. Omit to run unconfigured.
- * @param {string=} options.baseUrl      Checkr API base URL.
- * @param {string=} options.packageSlug  Screening package to order.
- * @param {string=} options.environment  Label reported to the client.
- * @param {Function=} options.fetchImpl  Injectable fetch, for tests.
+ * @param {object}    options
+ * @param {string=}   options.apiKey       Checkr secret key. Omit to run unconfigured.
+ * @param {string=}   options.baseUrl      Checkr API base URL.
+ * @param {string=}   options.packageSlug  Screening package to order.
+ * @param {string=}   options.environment  Label reported to the client.
+ * @param {object=}   options.store        Check store. Defaults to in-memory.
+ * @param {object=}   options.firebaseAuth Admin Auth instance for token checks.
+ * @param {Function=} options.fetchImpl    Injectable fetch, for tests.
  */
 export function createApp({
   apiKey,
   baseUrl,
   packageSlug = 'tasker_standard',
   environment = 'staging',
+  store = createStore(),
+  firebaseAuth = null,
   fetchImpl,
   logger = console,
 } = {}) {
   const checkr = apiKey ? createCheckrClient({ apiKey, baseUrl, fetchImpl }) : null
-  const store = createStore()
+  const authenticate = requireAuth(firebaseAuth)
   const app = express()
 
   /* ---------------------------------------------------------------- */
   /* Webhook — needs the raw body to verify the HMAC, so it is mounted */
-  /* before the JSON body parser.                                      */
+  /* before the JSON body parser. Checkr signs it; no user token here. */
   /* ---------------------------------------------------------------- */
 
-  app.post('/api/webhooks/checkr', express.raw({ type: '*/*' }), (req, res) => {
+  app.post('/api/webhooks/checkr', express.raw({ type: '*/*' }), async (req, res) => {
     if (!apiKey) return res.status(503).json({ error: 'Checkr is not configured' })
 
     if (!verifyWebhookSignature(req.body, req.get('X-Checkr-Signature'), apiKey)) {
@@ -50,33 +56,43 @@ export function createApp({
     const object = event?.data?.object ?? {}
     logger.log?.(`[checkr] webhook ${event.type} for ${object.id}`)
 
-    if (event.type?.startsWith('invitation.')) {
-      const record = store.findBy((c) => c.invitationId === object.id)
-      if (record) applyInvitation(record.id, object)
-    } else if (event.type?.startsWith('report.')) {
-      const record = store.findBy((c) => c.reportId === object.id)
-      if (record) applyReport(record.id, object)
+    try {
+      if (event.type?.startsWith('invitation.')) {
+        const record = await store.findBy({ field: 'invitationId', value: object.id })
+        if (record) await applyInvitation(record.id, object)
+      } else if (event.type?.startsWith('report.')) {
+        const record = await store.findBy({ field: 'reportId', value: object.id })
+        if (record) await applyReport(record.id, object)
+      }
+    } catch (error) {
+      logger.error?.('[checkr] webhook handling failed', error)
+      // Fall through to 200: Checkr retries non-2xx, and a retry storm on a bug
+      // in our own handler helps nobody. The poll path will reconcile.
     }
 
-    // Always 200 on a valid signature — Checkr retries non-2xx responses.
     res.json({ received: true })
   })
 
   app.use(express.json())
 
   /* ---------------------------------------------------------------- */
-  /* Config — lets the UI explain itself when the server has no key    */
+  /* Config — lets the UI explain itself when the server has no keys   */
   /* ---------------------------------------------------------------- */
 
   app.get('/api/config', (_req, res) => {
-    res.json({ checkrConfigured: Boolean(apiKey), environment, package: packageSlug })
+    res.json({
+      checkrConfigured: Boolean(apiKey),
+      firebaseConfigured: Boolean(firebaseAuth),
+      environment,
+      package: packageSlug,
+    })
   })
 
   /* ---------------------------------------------------------------- */
   /* Start a background check                                          */
   /* ---------------------------------------------------------------- */
 
-  app.post('/api/background-checks', async (req, res) => {
+  app.post('/api/background-checks', authenticate, async (req, res) => {
     if (!checkr) {
       return res.status(503).json({
         error: 'Background checks are unavailable: the server has no CHECKR_API_KEY configured.',
@@ -94,6 +110,13 @@ export function createApp({
     }
 
     try {
+      // One check per account. Re-running would create a second Checkr
+      // candidate and bill for a second report.
+      const existing = await store.get(req.uid)
+      if (existing && existing.status !== 'expired') {
+        return res.json(toPublicCheck(existing))
+      }
+
       const candidate = await checkr.createCandidate({
         first_name: String(firstName).trim(),
         last_name: String(lastName).trim(),
@@ -113,7 +136,8 @@ export function createApp({
         ],
       })
 
-      const record = store.create({
+      const record = await store.create({
+        uid: req.uid,
         candidateId: candidate.id,
         invitationId: invitation.id,
         invitationUrl: invitation.invitation_url,
@@ -122,7 +146,7 @@ export function createApp({
         status: invitation.status === 'completed' ? 'pending' : 'awaiting_candidate',
       })
 
-      logger.log?.(`[checkr] created ${record.id} (candidate ${candidate.id})`)
+      logger.log?.(`[checkr] created check for ${req.uid} (candidate ${candidate.id})`)
       res.status(201).json(toPublicCheck(record))
     } catch (error) {
       respondWithError(res, error)
@@ -133,9 +157,16 @@ export function createApp({
   /* Poll a background check                                           */
   /* ---------------------------------------------------------------- */
 
-  app.get('/api/background-checks/:id', async (req, res) => {
-    const record = store.get(req.params.id)
+  app.get('/api/background-checks/:id', authenticate, async (req, res) => {
+    const record = await store.get(req.params.id)
     if (!record) return res.status(404).json({ error: 'No such background check' })
+
+    // A check belongs to exactly one account. Without this, any signed-in user
+    // could read anyone else's screening result by guessing an id.
+    if (record.uid && record.uid !== req.uid) {
+      return res.status(404).json({ error: 'No such background check' })
+    }
+
     if (!checkr) return res.json(toPublicCheck(record))
 
     // Webhooks keep this fresh in production, but they need a public URL, so
@@ -145,12 +176,12 @@ export function createApp({
 
       if (!current.reportId && current.status === 'awaiting_candidate') {
         const invitation = await checkr.getInvitation(current.invitationId)
-        current = applyInvitation(current.id, invitation) ?? current
+        current = (await applyInvitation(current.id, invitation)) ?? current
       }
 
       if (current.reportId && current.status !== 'complete') {
         const report = await checkr.getReport(current.reportId)
-        current = applyReport(current.id, report) ?? current
+        current = (await applyReport(current.id, report)) ?? current
       }
 
       res.json(toPublicCheck(current))
@@ -164,7 +195,7 @@ export function createApp({
   /* ---------------------------------------------------------------- */
 
   /** Maps a Checkr invitation onto our record. */
-  function applyInvitation(checkId, invitation) {
+  async function applyInvitation(checkId, invitation) {
     const updates = {}
 
     if (invitation.report_id) {

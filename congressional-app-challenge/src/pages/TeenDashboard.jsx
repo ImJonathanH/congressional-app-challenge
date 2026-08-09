@@ -20,7 +20,7 @@ export default function TeenDashboard() {
   const [radius, setRadius] = useState(profile.radius ?? 3)
   const [sort, setSort] = useState('newest')
   const [showListing, setShowListing] = useState(false)
-  const [listed, setListed] = useState(app.listedTeens.some((t) => t.id === 'me'))
+  const listed = app.listed
 
   const jobs = useMemo(() => {
     const filtered = app.jobs.filter((j) => {
@@ -231,9 +231,8 @@ export default function TeenDashboard() {
         open={showListing}
         profile={profile}
         onClose={() => setShowListing(false)}
-        onSave={(next) => {
-          app.listSelf(next)
-          setListed(true)
+        onSave={async (next) => {
+          await app.listSelf(next)
           setShowListing(false)
         }}
       />

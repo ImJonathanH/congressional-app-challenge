@@ -403,3 +403,11 @@ a {
   white-space: nowrap;
   border: 0;
 }
+
+/* ---------- Full-page loading state ---------- */
+
+.page-spinner {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+}

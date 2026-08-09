@@ -339,3 +339,31 @@
 .verify-done .verify-waiting {
   text-align: left;
 }
+
+/* ---------- Auth ---------- */
+
+.auth-field {
+  margin-bottom: 18px;
+}
+
+.auth-field .survey-hint {
+  margin-top: 6px;
+}
+
+.setup-steps {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 24px;
+  padding-left: 20px;
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.setup-steps code {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 0.88em;
+}

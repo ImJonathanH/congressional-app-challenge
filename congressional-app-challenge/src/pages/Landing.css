@@ -450,3 +450,19 @@
     padding: 60px 0;
   }
 }
+
+.landing-signin {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.landing-signin:hover {
+  color: var(--brand);
+}
+
+@media (max-width: 900px) {
+  .landing-signin {
+    margin-left: auto;
+  }
+}

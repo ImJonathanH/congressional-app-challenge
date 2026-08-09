@@ -11,14 +11,17 @@ import '@fontsource/montserrat/800.css'
 
 import './index.css'
 import App from './App.jsx'
+import { AuthProvider } from './state/AuthProvider.jsx'
 import { AppProvider } from './state/AppContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <AppProvider>
-        <App />
-      </AppProvider>
+      <AuthProvider>
+        <AppProvider>
+          <App />
+        </AppProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 )

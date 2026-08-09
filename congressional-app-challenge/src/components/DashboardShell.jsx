@@ -1,16 +1,16 @@
 import { useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo.jsx'
 import Avatar from '../components/Avatar.jsx'
-import { useApp } from '../state/appContext.js'
+import { useAuth } from '../state/authContext.js'
 import './DashboardShell.css'
 
 /** Top bar shared by both dashboards. `action` is the page's small primary button. */
 export default function DashboardShell({ name, subtitle, verified, action, sidebar, children }) {
-  const app = useApp()
+  const auth = useAuth()
   const navigate = useNavigate()
 
-  const signOut = () => {
-    app.reset()
+  const handleSignOut = async () => {
+    await auth.signOut()
     navigate('/')
   }
 
@@ -32,7 +32,7 @@ export default function DashboardShell({ name, subtitle, verified, action, sideb
               <p className="dash-who-sub">{subtitle}</p>
             </div>
             <Avatar name={name} size={38} />
-            <button type="button" className="btn btn-quiet btn-sm" onClick={signOut}>
+            <button type="button" className="btn btn-quiet btn-sm" onClick={handleSignOut}>
               Sign out
             </button>
           </div>

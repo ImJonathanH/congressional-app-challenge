@@ -1,21 +1,25 @@
 import crypto from 'node:crypto'
 
 /**
- * In-memory record of background checks in flight.
+ * In-memory background-check store.
  *
- * Prototype-grade on purpose: restarting the server forgets everything. A real
- * deployment needs a database, because a Checkr report can take days to finish
- * and the candidate has to be able to come back to it.
+ * Used by the tests and by local development without Firebase. The real one is
+ * createFirestoreStore in firestoreStore.js — they share this interface, so
+ * app.js works with either.
  *
- * Note what is NOT stored here: no SSN, no date of birth. The candidate enters
- * those directly into Checkr's hosted form, so they never touch this server.
+ * Every method is async even though nothing here needs to be, so swapping in
+ * the Firestore store doesn't change a single call site.
+ *
+ * Note what is NOT stored: no SSN, no date of birth. The candidate enters those
+ * directly into Checkr's hosted form, so they never touch this server.
  */
 export function createStore() {
   const checks = new Map()
 
   return {
-    create(fields) {
-      const id = `chk_${crypto.randomBytes(9).toString('hex')}`
+    async create(fields) {
+      // One check per user, keyed by uid, matching the Firestore layout.
+      const id = fields.uid ?? `chk_${crypto.randomBytes(9).toString('hex')}`
       const now = new Date().toISOString()
       const record = {
         id,
@@ -32,9 +36,11 @@ export function createStore() {
       return record
     },
 
-    get: (id) => checks.get(id) ?? null,
+    async get(id) {
+      return checks.get(id) ?? null
+    },
 
-    update(id, updates) {
+    async update(id, updates) {
       const existing = checks.get(id)
       if (!existing) return null
       const next = { ...existing, ...updates, updatedAt: new Date().toISOString() }
@@ -43,9 +49,9 @@ export function createStore() {
     },
 
     /** Webhooks identify the resource by Checkr's ids, not ours. */
-    findBy(predicate) {
+    async findBy({ field, value }) {
       for (const record of checks.values()) {
-        if (predicate(record)) return record
+        if (record[field] === value) return record
       }
       return null
     },

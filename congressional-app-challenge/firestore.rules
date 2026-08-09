@@ -1,0 +1,81 @@
+rules_version = '2';
+
+// TeenHands security rules.
+//
+// These are the actual access control for the app — the Firebase config in the
+// client is public, so anything not forbidden here is allowed to anyone on the
+// internet. Deployed with: firebase deploy --only firestore:rules
+//
+// The Admin SDK used by the Express server bypasses these rules entirely, which
+// is why background-check results are server-written and client-read-only.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // A parent may only post jobs once their Checkr report came back clear.
+    function isClearedParent() {
+      return signedIn()
+        && myProfile().role == 'parent'
+        && exists(/databases/$(database)/documents/backgroundChecks/$(request.auth.uid))
+        && get(/databases/$(database)/documents/backgroundChecks/$(request.auth.uid)).data.result == 'clear';
+    }
+
+    // Private profile: role, ZIP, priorities, teen setup. Yours alone.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // Public teen directory. Readable by any signed-in user; a teen may only
+    // ever write their own listing, because the doc id is their uid.
+    match /teens/{uid} {
+      allow read: if signedIn();
+      allow create, update, delete: if isOwner(uid);
+    }
+
+    // Jobs are visible to everyone signed in; only cleared parents can post,
+    // and only the author can edit or delete.
+    match /jobs/{jobId} {
+      allow read: if signedIn();
+      allow create: if isClearedParent() && request.resource.data.postedBy == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.postedBy == request.auth.uid;
+    }
+
+    // A teen creates their own application; the parent who posted the job can
+    // read it and mark it accepted or declined.
+    match /applications/{applicationId} {
+      allow read: if signedIn()
+        && (resource.data.teenUid == request.auth.uid || resource.data.parentUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.teenUid == request.auth.uid;
+      allow update: if signedIn() && resource.data.parentUid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.teenUid == request.auth.uid;
+    }
+
+    // Invites belong to the parent who sent them.
+    match /invites/{inviteId} {
+      allow read, write: if signedIn() && request.resource.data.parentUid == request.auth.uid
+        || signedIn() && resource != null && resource.data.parentUid == request.auth.uid;
+    }
+
+    // Background checks are written ONLY by the server via the Admin SDK.
+    // A client can read its own result and can never write one — otherwise
+    // anyone could mark themselves cleared from the browser console.
+    match /backgroundChecks/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // Anything not matched above is denied.
+  }
+}
