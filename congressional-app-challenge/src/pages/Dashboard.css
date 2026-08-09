@@ -1,0 +1,455 @@
+/* Shared by the parent and teen dashboards. */
+
+/* ---------- Page header ---------- */
+
+.dash-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.dash-title {
+  font-size: 1.65rem;
+  margin-bottom: 4px;
+}
+
+.dash-sub {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dash-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dash-search {
+  width: 210px;
+  padding: 9px 13px;
+  font-size: 0.88rem;
+  border-radius: 999px;
+}
+
+/* ---------- Sidebar panels ---------- */
+
+.panel {
+  padding: 20px;
+}
+
+.panel-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 12px;
+  line-height: 1.45;
+}
+
+.panel-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.filter-block {
+  margin-bottom: 20px;
+}
+
+.filter-block-last {
+  margin-bottom: 0;
+}
+
+.filter-value {
+  color: var(--brand);
+}
+
+.filter-list {
+  display: grid;
+  gap: 3px;
+}
+
+.filter-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.13s ease;
+}
+
+.filter-radio:hover {
+  background: var(--bg);
+}
+
+.filter-radio.is-on {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+}
+
+.filter-radio input {
+  accent-color: var(--brand);
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.87rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-toggle input {
+  accent-color: var(--brand);
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.mini-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.mini-list li {
+  display: grid;
+  gap: 2px;
+}
+
+.mini-list-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.mini-list-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* ---------- Banners & empty states ---------- */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  margin-bottom: 20px;
+  border-radius: var(--radius);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.9rem;
+  font-weight: 600;
+  animation: banner-in 0.24s ease;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.banner-quiet {
+  background: var(--accent-soft);
+  color: #8a4d10;
+}
+
+.banner span {
+  flex: 1;
+}
+
+.banner-x {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.banner-x:hover {
+  opacity: 1;
+}
+
+.empty {
+  padding: 54px 30px;
+  text-align: center;
+}
+
+.empty-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.empty-body {
+  color: var(--muted);
+  font-size: 0.92rem;
+  max-width: 34rem;
+  margin: 0 auto 20px;
+}
+
+/* ---------- Teen cards (parent view) ---------- */
+
+.teen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 18px;
+}
+
+.teen-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.teen-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+.teen-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-bottom: 14px;
+}
+
+.teen-card-id {
+  flex: 1;
+  min-width: 0;
+}
+
+.teen-card-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 1.02rem;
+  flex-wrap: wrap;
+}
+
+.teen-card-verified {
+  font-size: 0.66rem;
+  padding: 2px 8px;
+}
+
+.teen-card-meta {
+  font-size: 0.79rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.teen-card-rate {
+  font-weight: 800;
+  font-size: 1.16rem;
+  white-space: nowrap;
+}
+
+.teen-card-rate span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.teen-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.teen-card-bio {
+  font-size: 0.88rem;
+  color: var(--ink-2);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.teen-card-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.day-pill {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.teen-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.teen-card-rating {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.teen-card-rating .muted {
+  font-weight: 600;
+}
+
+/* ---------- Job cards (teen view) ---------- */
+
+.job-list {
+  display: grid;
+  gap: 14px;
+}
+
+.job-card {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  padding: 20px 22px;
+  border-radius: var(--radius-lg);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.job-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.job-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.job-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.job-card-posted {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.job-card-title {
+  font-size: 1.1rem;
+  margin-bottom: 5px;
+}
+
+.job-card-meta {
+  font-size: 0.81rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.job-card-desc {
+  font-size: 0.89rem;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.job-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  padding-left: 20px;
+  border-left: 1px solid var(--line);
+  flex: none;
+}
+
+.job-card-pay {
+  font-weight: 800;
+  font-size: 1.25rem;
+  white-space: nowrap;
+}
+
+.job-card-pay span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------- Modal helpers ---------- */
+
+.modal-field {
+  margin-bottom: 18px;
+}
+
+.modal-field .form-grid {
+  margin-bottom: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+@media (max-width: 620px) {
+  .job-card {
+    flex-direction: column;
+  }
+
+  .job-card-side {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    padding-left: 0;
+    padding-top: 14px;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .dash-search {
+    width: 100%;
+  }
+
+  .dash-head-actions {
+    width: 100%;
+  }
+}

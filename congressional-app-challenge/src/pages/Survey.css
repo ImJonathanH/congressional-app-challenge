@@ -1,0 +1,368 @@
+.survey {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(760px 380px at 82% -10%, var(--brand-soft), transparent 60%), var(--bg);
+}
+
+.survey-top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.survey-top-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 62px;
+}
+
+.survey-count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.survey-progress {
+  height: 4px;
+  background: var(--line);
+}
+
+.survey-progress span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.survey-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 46px 20px 72px;
+}
+
+.survey-panel {
+  width: 100%;
+  max-width: 660px;
+}
+
+.survey-back {
+  margin-bottom: 14px;
+  padding-left: 10px;
+  padding-right: 14px;
+}
+
+.survey-step {
+  animation: survey-in 0.24s ease;
+}
+
+@keyframes survey-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.survey-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand);
+  margin-bottom: 12px;
+}
+
+.survey-q {
+  font-size: clamp(1.7rem, 4vw, 2.25rem);
+  margin-bottom: 12px;
+}
+
+.survey-help {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-bottom: 28px;
+  max-width: 34rem;
+}
+
+.survey-next {
+  margin-top: 26px;
+}
+
+.survey-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+
+.survey-error {
+  color: var(--danger);
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.survey-hint {
+  color: var(--muted);
+  font-size: 0.84rem;
+  margin-top: 10px;
+}
+
+.survey-disclaimer {
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  margin-top: 16px;
+}
+
+/* ---------- ZIP ---------- */
+
+.survey-zip-field {
+  max-width: 260px;
+}
+
+.survey-zip {
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-align: center;
+  padding: 16px 12px;
+  border-radius: var(--radius);
+}
+
+/* ---------- Role ---------- */
+
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.role-card {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  text-align: left;
+  padding: 26px 24px;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.role-card:hover,
+.role-card.is-selected {
+  border-color: var(--brand);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+.role-emoji {
+  font-size: 2rem;
+  margin-bottom: 4px;
+}
+
+.role-title {
+  font-size: 1.16rem;
+  font-weight: 800;
+}
+
+.role-body {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.role-note {
+  margin-top: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--brand-dark);
+  background: var(--brand-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+/* ---------- Chips ---------- */
+
+.priority-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+/* ---------- Forms ---------- */
+
+.consent input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--brand);
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  font-size: 0.87rem;
+  color: var(--ink-2);
+  line-height: 1.5;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 15px 16px;
+  cursor: pointer;
+}
+
+/* ---------- Verification ---------- */
+
+.verify-stages {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.verify-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  opacity: 0.42;
+  transition:
+    opacity 0.25s ease,
+    background 0.25s ease;
+}
+
+.verify-stage.is-active {
+  opacity: 1;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.verify-stage.is-done {
+  opacity: 0.85;
+}
+
+.verify-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 2px;
+}
+
+.verify-stage.is-active .verify-dot {
+  border-color: var(--brand);
+  border-right-color: transparent;
+  animation: spin 0.9s linear infinite;
+}
+
+.verify-stage.is-done .verify-dot {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.verify-stage-label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.verify-stage-detail {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.verify-done {
+  text-align: center;
+}
+
+.verify-done .survey-help {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.verify-check {
+  display: inline-grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 2.1rem;
+  font-weight: 800;
+  margin-bottom: 18px;
+  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
+.verify-receipt {
+  display: grid;
+  gap: 2px;
+  padding: 18px 22px;
+  text-align: left;
+  margin: 0;
+}
+
+.verify-receipt > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.88rem;
+}
+
+.verify-receipt > div:last-child {
+  border-bottom: none;
+}
+
+.verify-receipt dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.verify-receipt dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.verify-clear {
+  color: var(--ok);
+}

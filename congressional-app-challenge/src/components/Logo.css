@@ -1,0 +1,44 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.logo-mark {
+  display: grid;
+  place-items: center;
+  background: var(--brand);
+  color: #fff;
+  border-radius: 10px;
+}
+
+.logo-mark svg {
+  width: 68%;
+  height: 68%;
+}
+
+.logo-md .logo-mark {
+  width: 34px;
+  height: 34px;
+}
+
+.logo-md .logo-word {
+  font-size: 1.25rem;
+}
+
+.logo-sm .logo-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.logo-sm .logo-word {
+  font-size: 1.05rem;
+}
+
+.logo-word-accent {
+  color: var(--brand);
+}
