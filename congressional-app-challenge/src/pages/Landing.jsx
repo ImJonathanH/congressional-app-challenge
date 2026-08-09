@@ -167,12 +167,13 @@ export default function Landing() {
                 Parents are screened before they can contact a single teen
               </h2>
               <p className="section-sub trust-copy">
-                Every parent account runs through a Raptor background check — identity, criminal
-                records, and watchlists — before their dashboard unlocks. Teens choose their own
-                work radius and never share an address until they accept a job.
+                Every parent account runs through a Checkr background check — SSN trace, national
+                criminal search, sex-offender registry, and county records — before their dashboard
+                unlocks. Teens choose their own work radius and never share an address until they
+                accept a job.
               </p>
               <ul className="trust-list">
-                <li>Raptor identity and criminal-record screening</li>
+                <li>Checkr criminal-record and sex-offender registry screening</li>
                 <li>Teen-controlled work radius and availability</li>
                 <li>Ratings and reviews from real neighbors</li>
               </ul>
@@ -183,7 +184,7 @@ export default function Landing() {
             <div className="trust-badge card" aria-hidden="true">
               <span className="trust-badge-check">✓</span>
               <p className="trust-badge-title">Background check complete</p>
-              <p className="trust-badge-meta">Raptor · Identity · Criminal · Watchlists</p>
+              <p className="trust-badge-meta">Checkr · SSN trace · Criminal · Registry</p>
               <span className="tag tag-ok">Cleared</span>
             </div>
           </div>
@@ -194,8 +195,8 @@ export default function Landing() {
         <div className="shell landing-foot-inner">
           <Logo to={null} size="sm" />
           <p className="muted landing-foot-note">
-            A Congressional App Challenge project. Demo data — no real background checks are
-            performed.
+            A Congressional App Challenge project. Teen and job listings are demo data;
+            background checks run against the real Checkr API.
           </p>
           <Link to="/start" className="btn btn-ghost btn-sm">
             Get Started

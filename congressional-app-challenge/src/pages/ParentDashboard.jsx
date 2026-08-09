@@ -207,7 +207,7 @@ export default function ParentDashboard() {
     <DashboardShell
       name={app.verification?.applicantName || 'Your family'}
       subtitle={`Parent · ZIP ${app.zip}`}
-      verified={app.verification?.status === 'clear'}
+      verified={app.verification?.result === 'clear'}
       sidebar={sidebar}
       action={
         <div className="dash-head">

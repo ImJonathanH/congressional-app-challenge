@@ -229,59 +229,23 @@
 
 /* ---------- Verification ---------- */
 
-.verify-stages {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.verify-stage {
+.verify-waiting {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  opacity: 0.42;
-  transition:
-    opacity 0.25s ease,
-    background 0.25s ease;
+  padding: 18px 20px;
+  margin-top: 24px;
 }
 
-.verify-stage.is-active {
-  opacity: 1;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.verify-stage.is-done {
-  opacity: 0.85;
-}
-
-.verify-dot {
-  display: grid;
-  place-items: center;
+.verify-spinner {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  border: 2px solid var(--line);
-  font-size: 0.72rem;
-  font-weight: 800;
-  color: #fff;
+  border: 2.5px solid var(--line);
+  border-right-color: var(--brand);
   margin-top: 2px;
-}
-
-.verify-stage.is-active .verify-dot {
-  border-color: var(--brand);
-  border-right-color: transparent;
   animation: spin 0.9s linear infinite;
-}
-
-.verify-stage.is-done .verify-dot {
-  background: var(--ok);
-  border-color: var(--ok);
 }
 
 @keyframes spin {
@@ -365,4 +329,13 @@
 
 .verify-clear {
   color: var(--ok);
+}
+
+.verify-check-review {
+  background: var(--accent-soft);
+  color: var(--warn);
+}
+
+.verify-done .verify-waiting {
+  text-align: left;
 }

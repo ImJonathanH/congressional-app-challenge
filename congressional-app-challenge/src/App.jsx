@@ -26,10 +26,18 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/start" element={<Survey />} />
+        {/* Only a completed Checkr report with a clear result unlocks the
+            dashboard — "consider" means a human still has to review it. */}
         <Route
           path="/parent"
           element={
-            <Guard allow={(a) => a.role === 'parent' && a.verification?.status === 'clear'}>
+            <Guard
+              allow={(a) =>
+                a.role === 'parent' &&
+                a.verification?.status === 'complete' &&
+                a.verification?.result === 'clear'
+              }
+            >
               <ParentDashboard />
             </Guard>
           }

@@ -1,13 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo.jsx'
 import { useApp } from '../state/appContext.js'
 import { PARENT_PRIORITIES, SERVICES, WEEKDAYS } from '../data/services.js'
 import {
-  VERIFICATION_STAGES,
-  submitBackgroundCheck,
+  fetchConfig,
+  isClear,
+  isFinished,
+  needsReview,
+  startBackgroundCheck,
   validateApplicant,
-} from '../services/raptorVerification.js'
+  watchBackgroundCheck,
+} from '../services/backgroundCheck.js'
 import './Survey.css'
 
 const ZIP_RE = /^\d{5}$/
@@ -219,150 +223,287 @@ export default function Survey() {
 function VerifyStep({ onStart, onDone }) {
   const app = useApp()
   const [applicant, setApplicant] = useState({
-    fullName: '',
-    dateOfBirth: '',
-    address: '',
-    consent: false,
+    firstName: '',
+    lastName: '',
+    email: '',
+    workCity: '',
+    workState: '',
   })
-  const [phase, setPhase] = useState('form') // form | running | done
-  const [stageIndex, setStageIndex] = useState(-1)
-  const [result, setResult] = useState(app.verification)
+  // form | starting | awaiting_candidate | pending | complete | error
+  const [phase, setPhase] = useState('form')
+  const [check, setCheck] = useState(app.verification)
+  const [error, setError] = useState(null)
+  const [config, setConfig] = useState(null)
+
+  const fullName = `${applicant.firstName} ${applicant.lastName}`.trim()
+
+  useEffect(() => {
+    fetchConfig()
+      .then(setConfig)
+      .catch(() => setConfig({ checkrConfigured: false, unreachable: true }))
+  }, [])
+
+  // Watch the check until Checkr finishes the report.
+  useEffect(() => {
+    if (!check?.id || isFinished(check)) return undefined
+
+    const watcher = watchBackgroundCheck(check.id, {
+      onUpdate: (next) => {
+        setCheck(next)
+        setPhase(isFinished(next) ? 'complete' : next.status)
+        if (isClear(next)) app.setVerification({ ...next, applicantName: fullName })
+      },
+    })
+    watcher.promise.catch((e) => {
+      setError(e.message)
+      setPhase('error')
+    })
+    return watcher.cancel
+    // Re-subscribe only when the check identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [check?.id])
 
   const { valid } = validateApplicant(applicant)
-  const set = (key) => (e) =>
-    setApplicant((a) => ({
-      ...a,
-      [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value,
-    }))
+  const set = (key) => (e) => setApplicant((a) => ({ ...a, [key]: e.target.value }))
 
   const run = async (e) => {
     e.preventDefault()
-    setPhase('running')
+    setError(null)
+    setPhase('starting')
     onStart?.()
-    const checked = await submitBackgroundCheck(applicant, (_stage, i) => setStageIndex(i))
-    // Keep the name alongside the result so the dashboard can greet them.
-    const res = { ...checked, applicantName: applicant.fullName }
-    setResult(res)
-    app.setVerification(res)
-    setPhase('done')
+    try {
+      const started = await startBackgroundCheck(applicant)
+      setCheck(started)
+      setPhase(started.status)
+    } catch (err) {
+      setError(err.message)
+      setPhase('error')
+    }
   }
 
-  if (phase === 'done' && result) {
+  /* ---------- Finished ---------- */
+
+  if (phase === 'complete' && check) {
+    if (isClear(check)) {
+      return (
+        <div className="survey-step verify-done">
+          <span className="verify-check" aria-hidden="true">
+            ✓
+          </span>
+          <h1 className="survey-q">You&apos;re verified</h1>
+          <p className="survey-help">
+            Checkr returned a clear report. Teens will see a verified badge on your family profile.
+          </p>
+          <dl className="verify-receipt card">
+            <div>
+              <dt>Result</dt>
+              <dd className="verify-clear">Clear</dd>
+            </div>
+            <div>
+              <dt>Reference</dt>
+              <dd>{check.id}</dd>
+            </div>
+            <div>
+              <dt>Provider</dt>
+              <dd>Checkr</dd>
+            </div>
+          </dl>
+          <button type="button" className="btn btn-primary btn-lg survey-next" onClick={onDone}>
+            Go to my dashboard →
+          </button>
+        </div>
+      )
+    }
+
+    // "Consider", "suspended" and "expired" all stop here. A consider result
+    // is a human decision under FCRA, never an automatic rejection or pass.
     return (
       <div className="survey-step verify-done">
-        <span className="verify-check" aria-hidden="true">
-          ✓
+        <span className="verify-check verify-check-review" aria-hidden="true">
+          !
         </span>
-        <h1 className="survey-q">You&apos;re verified</h1>
+        <h1 className="survey-q">
+          {needsReview(check) ? 'Your report needs a review' : 'We couldn’t finish your check'}
+        </h1>
         <p className="survey-help">
-          Raptor found no criminal records or watchlist matches. Teens will see a verified badge on
-          your family profile.
+          {needsReview(check)
+            ? 'Checkr flagged something on your report for a person to look at. Our team reviews these by hand and will email you — a flag is not a rejection, and you have the right to dispute anything inaccurate.'
+            : check.status === 'expired'
+              ? 'Your Checkr invitation expired before it was completed. Start again to get a new link.'
+              : 'Checkr suspended this report, usually because some information was missing. Our team will email you.'}
         </p>
         <dl className="verify-receipt card">
           <div>
-            <dt>Status</dt>
-            <dd className="verify-clear">Clear</dd>
+            <dt>Result</dt>
+            <dd>{check.result ?? check.status}</dd>
           </div>
           <div>
             <dt>Reference</dt>
-            <dd>{result.referenceId}</dd>
-          </div>
-          <div>
-            <dt>Provider</dt>
-            <dd>{result.provider}</dd>
+            <dd>{check.id}</dd>
           </div>
         </dl>
-        <button type="button" className="btn btn-primary btn-lg survey-next" onClick={onDone}>
-          Go to my dashboard →
-        </button>
+        <p className="survey-hint">
+          Your dashboard unlocks once the review clears. You can close this page.
+        </p>
       </div>
     )
   }
 
-  if (phase === 'running') {
+  /* ---------- Waiting on Checkr ---------- */
+
+  if (phase === 'awaiting_candidate' && check) {
     return (
       <div className="survey-step">
-        <h1 className="survey-q">Running your background check</h1>
-        <p className="survey-help">This usually takes under a minute. Don&apos;t close the tab.</p>
-        <ol className="verify-stages">
-          {VERIFICATION_STAGES.map((stage, i) => (
-            <li
-              key={stage.id}
-              className={`verify-stage${i < stageIndex ? ' is-done' : ''}${
-                i === stageIndex ? ' is-active' : ''
-              }`}
-            >
-              <span className="verify-dot" aria-hidden="true">
-                {i < stageIndex ? '✓' : ''}
-              </span>
-              <span>
-                <span className="verify-stage-label">{stage.label}</span>
-                <span className="verify-stage-detail">{stage.detail}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
+        <span className="survey-badge">Almost done</span>
+        <h1 className="survey-q">Finish your check with Checkr</h1>
+        <p className="survey-help">
+          Checkr collects your SSN and date of birth on their own secure page and handles the
+          consent forms the law requires. TeenHands never sees them.
+        </p>
+
+        <a
+          className="btn btn-primary btn-lg"
+          href={check.invitationUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open Checkr →
+        </a>
+
+        <div className="verify-waiting card">
+          <span className="verify-spinner" aria-hidden="true" />
+          <span>
+            <span className="verify-stage-label">Waiting for you to finish</span>
+            <span className="verify-stage-detail">
+              This page updates on its own once Checkr has your information.
+            </span>
+          </span>
+        </div>
+
+        {check.expiresAt && (
+          <p className="survey-hint">
+            Your link expires {new Date(check.expiresAt).toLocaleDateString()}.
+          </p>
+        )}
       </div>
     )
   }
+
+  if (phase === 'pending' || phase === 'starting') {
+    return (
+      <div className="survey-step">
+        <h1 className="survey-q">
+          {phase === 'starting' ? 'Setting up your check' : 'Checkr is running your report'}
+        </h1>
+        <p className="survey-help">
+          {phase === 'starting'
+            ? 'One moment.'
+            : 'Most reports come back within a few minutes, but some county searches take longer. You can leave this page — we’ll email you.'}
+        </p>
+        <div className="verify-waiting card">
+          <span className="verify-spinner" aria-hidden="true" />
+          <span>
+            <span className="verify-stage-label">
+              {phase === 'starting' ? 'Creating your Checkr candidate' : 'Report in progress'}
+            </span>
+            <span className="verify-stage-detail">
+              SSN trace · national criminal search · sex-offender registry · county records
+            </span>
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  /* ---------- Form ---------- */
 
   return (
     <form className="survey-step" onSubmit={run}>
       <span className="survey-badge">Required for parents</span>
       <h1 className="survey-q">Verify your identity</h1>
       <p className="survey-help">
-        Every parent is screened through Raptor before they can message a teen. Teens are trusting
+        Every parent is screened through Checkr before they can message a teen. Teens are trusting
         you with their time and safety — this is the part that earns it.
       </p>
 
       <div className="form-grid">
         <label className="field">
-          <span className="field-label">Full legal name</span>
+          <span className="field-label">First name</span>
           <input
             className="input"
-            value={applicant.fullName}
-            onChange={set('fullName')}
-            placeholder="Jordan Alvarez"
-            autoComplete="name"
+            value={applicant.firstName}
+            onChange={set('firstName')}
+            placeholder="Jordan"
+            autoComplete="given-name"
           />
         </label>
         <label className="field">
-          <span className="field-label">Date of birth</span>
+          <span className="field-label">Last name</span>
           <input
             className="input"
-            type="date"
-            value={applicant.dateOfBirth}
-            onChange={set('dateOfBirth')}
+            value={applicant.lastName}
+            onChange={set('lastName')}
+            placeholder="Alvarez"
+            autoComplete="family-name"
           />
         </label>
         <label className="field form-full">
-          <span className="field-label">Home address</span>
+          <span className="field-label">Email</span>
           <input
             className="input"
-            value={applicant.address}
-            onChange={set('address')}
-            placeholder="482 Sylvan Ave, Mountain View, CA"
-            autoComplete="street-address"
+            type="email"
+            value={applicant.email}
+            onChange={set('email')}
+            placeholder="jordan@example.com"
+            autoComplete="email"
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">City</span>
+          <input
+            className="input"
+            value={applicant.workCity}
+            onChange={set('workCity')}
+            placeholder="Mountain View"
+            autoComplete="address-level2"
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">State</span>
+          <input
+            className="input"
+            value={applicant.workState}
+            onChange={(e) => setApplicant((a) => ({ ...a, workState: e.target.value.toUpperCase() }))}
+            placeholder="CA"
+            maxLength={2}
+            autoComplete="address-level1"
           />
         </label>
       </div>
 
-      <label className="consent">
-        <input type="checkbox" checked={applicant.consent} onChange={set('consent')} />
-        <span>
-          I authorize TeenHands and Raptor Technologies to run a background check, including
-          criminal-record and watchlist screening, and I confirm the information above is mine.
-        </span>
-      </label>
-
       <p className="survey-disclaimer">
-        Demo note: this prototype simulates the Raptor screening. No data leaves your browser and no
-        real check is performed.
+        We don&apos;t ask for your SSN. Checkr collects it directly on the next screen, along with
+        the disclosure and authorization the Fair Credit Reporting Act requires.
       </p>
 
-      <button type="submit" className="btn btn-primary btn-lg survey-next" disabled={!valid}>
-        Run background check
+      {config && !config.checkrConfigured && (
+        <p className="survey-error">
+          {config.unreachable
+            ? 'The TeenHands API isn’t running. Start it with `npm run server`.'
+            : 'This server has no Checkr API key configured, so verification is unavailable. See the README.'}
+        </p>
+      )}
+
+      {phase === 'error' && error && <p className="survey-error">{error}</p>}
+
+      <button
+        type="submit"
+        className="btn btn-primary btn-lg survey-next"
+        disabled={!valid || config?.checkrConfigured === false}
+      >
+        Continue to Checkr
       </button>
+      {!valid && <p className="survey-hint">Fill in your name, email, and state to continue.</p>}
     </form>
   )
 }
